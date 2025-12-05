@@ -16,7 +16,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 version = 1.0.0
 
 # Залежності Python
-requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,urllib3,certifi,charset-normalizer,idna
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,urllib3,certifi,charset-normalizer,idna,libffi==3.4.2
 
 # Android permissions
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
@@ -28,10 +28,10 @@ android.api = 33
 android.maxsdk = 34
 
 # SDK/NDK
-android.ndk = 25b
+android.ndk = 23c
 android.build_tools_version = 34.0.0
 
-# Архітектура (замість x86_64 для стабільності CI)
+# Архітектура
 android.arch = arm64-v8a
 
 # Графіка
@@ -66,12 +66,8 @@ android.entrypoint = org.kivy.android.PythonActivity
 # Source touch
 android.touch_sources = weather.py
 
-# Підключення іконок (в CI/локально)
-# Тебе res/ треба копіювати перед збіркою:
-# mkdir -p app/res && cp -r res/drawable-* app/res/
-
 [p4a]
-branch = develop
+branch = stable
 extra_requirements = openssl
 
 [buildozer]
