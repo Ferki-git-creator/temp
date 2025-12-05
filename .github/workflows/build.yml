@@ -39,34 +39,35 @@ jobs:
       - name: Install python tools (cython, buildozer)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          # Важливо: Фіксуємо cython для сумісності з Kivy 2.2.1
+          # Встановлюємо Cython. Версія 0.29.33 необхідна для Kivy 2.2.1
           python3 -m pip install cython==0.29.33
-          # Встановлюємо Buildozer версії 1.5.0 або новішої, щоб виправити помилку пошуку python-for-android
-          python3 -m pip install --user "buildozer>=1.5.0"
-          # додамо ~/.local/bin до PATH, щоб знайти buildozer
+          
+          # *** КЛЮЧОВЕ ВИПРАВЛЕННЯ #2: Примусово встановлюємо Buildozer 1.5.0, щоб виправити проблему з python-for-android==2023.11.01
+          python3 -m pip install --user buildozer==1.5.0
+          
+          # Перевіримо, чи встановилася нова версія
+          echo "Перевіряємо версію Buildozer:"
+          python3 -m buildozer --version
+          
+          # додамо ~/.local/bin до PATH, де лежить buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Install Android SDK (Platform tools & Build tools)
-        run: |
-          # Встановлення необхідних інструментів SDK у $HOME/Android/Sdk
-          export ANDROID_SDK_ROOT=$HOME/Android/Sdk
-          mkdir -p $ANDROID_SDK_ROOT
-          # Встановлення інструментів командного рядка
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          rm cmdline-tools.zip
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # Встановлюємо SDK 33, бо це наш android.api
+          api-level: 33
+          build-tools: 34.0.0
+          # NDK 25b - це наш android.ndk
+          ndk: 25b
+          
+          # Встановлюємо cmdline-tools автоматично
+          command-line-tools: latest
+          # Приймаємо всі ліцензії
+          all-licenses: true
 
-          # Додаємо інструменти до PATH
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
-          # Завантаження та прийняття ліцензії (важливо для запуску sdkmanager)
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          # Завантаження build-tools та platform-tools (API 33)
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-33" "platform-tools"
-
-      - name: Run Buildozer clean (Aggressive cache clear)
+      # Додаткове очищення кешу, щоб гарантувати, що старий кеш p4a не заважає
+      - name: Clear problematic cache
         run: |
           echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
           # Видаляємо всі артефакти p4a
@@ -74,22 +75,21 @@ jobs:
           # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
-          # Чистимо всі робочі каталоги Buildozer
-          python3 -m buildozer -v android clean
+          # Видаляємо старий кеш Buildozer
+          rm -rf ~/.buildozer/cache || true
 
-      - name: Build APK
+      - name: Run Buildozer
         run: |
           echo "=== Starting APK build ==="
-          # Тепер PATH автоматично містить ~/.local/bin і SDK інструменти через GITHUB_PATH
-          # Але перетворимо на повний PATH на випадок:
-          export PATH="${HOME}/.local/bin:${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:$PATH"
-
+          
+          # Видаляємо змінні, щоб уникнути конфліктів
           unset ANDROID_NDK ANDROIDNDK || true
 
           # Оновимо p4a (fetch/update)
           python3 -m buildozer android update || true
 
           # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
+          # Ми використовуємо команду 'y' | ... для автоматичного підтвердження завантаження SDK
           echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
           if ls bin/*.apk 1> /dev/null 2>&1; then
@@ -116,14 +116,19 @@ jobs:
           retention-days: 30
 
       - name: Optional:create GH release with APK
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: softprops/action-gh-release@v1
+        if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+        uses: softprops/action-gh-release@v2
         with:
           files: bin/*.apk
-          tag_name: v${{ env.VERSION }}-${{ github.sha }}
-          name: Weather App ${{ env.VERSION }}
+          tag_name: ${{ github.sha }}
+          name: "APK Build ${{ github.sha }}"
+          body: "Автоматичний реліз APK для Android."
           draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: false
+          
+      - name: Display end of log (for failure)
+        if: ${{ failure() }}
+        run: |
+          echo "Повний лог при помилці:"
+          cat build.log || true
 
