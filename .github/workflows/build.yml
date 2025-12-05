@@ -19,6 +19,13 @@ jobs:
       ANDROID_NDK: ""
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
+      
+      # *** ДОДАНО: Явні URL-адреси для SDL2-пакетів для обходу таймаутів p4a ***
+      P4A_SDL2_URL: https://www.libsdl.org/download-2.0.php
+      P4A_SDL2_IMAGE_URL: https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.5.tar.gz
+      P4A_SDL2_MIXER_URL: https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.0.4.tar.gz
+      P4A_SDL2_TTF_URL: https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.18.tar.gz
+      P4A_SDL2_GLES_URL: https://www.libsdl.org/download-2.0.php
 
     steps:
       - name: Checkout code
@@ -121,8 +128,7 @@ jobs:
 
           python3 -m buildozer android update || true
 
-          # *** ВАЖЛИВА ЗМІНА: Вивід перенаправлено до stdout/stderr, а не у build.log ***
-          # Використовуємо 'time' для відстеження тривалості збірки
+          # Вивід перенаправлено до stdout/stderr
           time echo "y" | python3 -m buildozer -v android clean debug
 
           # Перевіряємо, чи був успішно створений файл APK
@@ -141,8 +147,6 @@ jobs:
           name: weather-app-apk
           path: bin/*.apk
           retention-days: 90
-
-      # *** ВИДАЛЕНО: Крок завантаження build.log ***
 
       - name: Optional create GH release with APK
         if: github.event_name == 'workflow_dispatch'
