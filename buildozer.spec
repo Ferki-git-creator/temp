@@ -10,9 +10,10 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# ВСІ твої залежності. Прибрано urllib3, certifi, idna, charset-normalizer, оскільки
-# вони автоматично підтягуються бібліотекою requests, і це мінімізує конфлікти p4a.
-requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder
+# === КРИТИЧНЕ ВИПРАВЛЕННЯ ===
+# Додано hostpython3, openssl та libffi.
+# Openssl необхідний для роботи HTTPS (requests). Libffi допомагає у збірці.
+requirements = python3,hostpython3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,openssl,libffi
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
