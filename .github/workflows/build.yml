@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # скидаємо змінні щоб p4a не підхопив старі NDK зі середовища раннера
+      # Не даємо GitHub runner своїх старих NDK/SDK — будемо самі керувати SDK у $ANDROID_SDK_ROOT
       ANDROID_NDK: ""
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
@@ -42,6 +42,60 @@ jobs:
           python3 -m pip install cython==0.29.33
           python3 -m pip install buildozer
 
+      - name: Setup Android SDK root and cmdline-tools
+        run: |
+          set -e
+          export ANDROID_SDK_ROOT="${HOME}/Android/Sdk"
+          mkdir -p "${ANDROID_SDK_ROOT}"
+          cd "${HOME}"
+
+          # скачати офіційний zip cmdline-tools (linux latest snapshot)
+          CMDLINE_ZIP="/tmp/commandlinetools-linux-9477386_latest.zip"
+          if [ ! -f "$CMDLINE_ZIP" ]; then
+            echo "Downloading Android command-line tools..."
+            wget -q -O "$CMDLINE_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
+          fi
+
+          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
+          unzip -q -o "$CMDLINE_ZIP" -d "${ANDROID_SDK_ROOT}/cmdline-tools"
+          # some packages extract into 'cmdline-tools' dir — ensure structure cmdline-tools/latest/bin
+          if [ -d "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" ]; then
+            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
+          else
+            mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
+            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/"* "${ANDROID_SDK_ROOT}/cmdline-tools/latest/" || true
+          fi
+
+          export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:$PATH"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
+          echo "PATH=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:$PATH" >> $GITHUB_ENV
+
+      - name: Install Android SDK packages (platform-tools, build-tools, platforms, ndk)
+        env:
+          ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
+        run: |
+          set -e
+          export SDK_ROOT="${ANDROID_SDK_ROOT}"
+          export PATH="${SDK_ROOT}/cmdline-tools/latest/bin:${SDK_ROOT}/platform-tools:$PATH"
+
+          # Accept licenses non-interactively
+          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
+
+          # Update sdkmanager and install required components
+          sdkmanager --sdk_root="${SDK_ROOT}" --update
+
+          # Install essentials: platform-tools, platform 33, build-tools 34.0.0 and NDK r25b (25.1.8937393)
+          sdkmanager --sdk_root="${SDK_ROOT}" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.1.8937393"
+
+          # Accept licenses again to be safe
+          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
+
+          # expose paths to workflow
+          echo "ANDROID_SDK_ROOT=${SDK_ROOT}" >> $GITHUB_ENV
+          echo "ANDROID_HOME=${SDK_ROOT}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${SDK_ROOT}/ndk/25.1.8937393" >> $GITHUB_ENV
+          echo "PATH=${SDK_ROOT}/platform-tools:${SDK_ROOT}/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+
       - name: Ensure buildozer.spec preview
         run: |
           echo "=== buildozer.spec preview ==="
@@ -55,32 +109,36 @@ jobs:
           fi
           find app/res -maxdepth 2 -print || true
 
-      - name: Clean leftover .buildozer NDK (avoid old versions)
+      - name: Clean old p4a artifacts (optional)
         run: |
           rm -rf ~/.buildozer/android/platform/android-ndk-*
           rm -rf ./.buildozer/android/platform/android-ndk-*
-          # іноді також корисно почистити кеш пакетів
           rm -rf ~/.buildozer/android/packages || true
 
       - name: Start APK build (debug)
+        env:
+          ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
+          ANDROID_HOME: "${HOME}/Android/Sdk"
+          ANDROID_NDK_HOME: "${HOME}/Android/Sdk/ndk/25.1.8937393"
+          PATH: "${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:${PATH}"
         run: |
           set -e
           echo "=== Starting APK build ==="
-          # явно обнуляємо можливі змінні середовища (ще раз)
-          unset ANDROID_NDK ANDROIDNDK ANDROID_SDK_ROOT ANDROID_HOME ANDROID_SDK || true
+          # make sure no interfering env variables
+          unset ANDROID_NDK ANDROIDNDK || true
 
-          # Попросимо buildozer завантажити/оновити python-for-android і потрібні інструменти
+          # Ensure p4a is fetched/updated
           buildozer android update || true
 
-          # Запуск збірки (debug) — відповімо "y" автоматично
+          # Build (debug). "y" to respond to confirmations.
           echo "y" | buildozer -v android debug 2>&1 | tee build.log
 
-          # Перевірка наявності APK
+          # Check APK
           if ls bin/*.apk 1> /dev/null 2>&1; then
             echo "✅ APK successfully created!"
             ls -lh bin/*.apk
           else
-            echo "❌ APK not found! Ось останні 200 рядків build.log:"
+            echo "❌ APK not found! Last 200 lines of build.log:"
             tail -n 200 build.log || true
             exit 1
           fi
