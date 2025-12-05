@@ -10,8 +10,8 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# ВСІ твої залежності без урізання функціоналу:
-requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,urllib3,certifi,charset-normalizer,idna,libffi==3.4.2
+# ВСІ твої залежності (НЕ вказуємо libffi явно — p4a має свій рецепт)
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,urllib3,certifi,charset-normalizer,idna
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
@@ -20,11 +20,11 @@ android.targetapi = 33
 android.api = 33
 android.maxsdk = 34
 
-# ВАЖЛИВО: NDK >= 25 (p4a вимагає мінімум 25). 
+# ВАЖЛИВО: p4a зараз вимагає NDK >= 25
 android.ndk = 25b
 android.build_tools_version = 34.0.0
 
-# Використовуємо сучасний ключ (не deprecated)
+# Сучасна конфігурація архітектур
 android.archs = arm64-v8a
 
 graphics_api = opengl_es2
