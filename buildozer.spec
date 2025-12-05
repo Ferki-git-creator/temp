@@ -10,12 +10,12 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# Оновлено kivymd до 1.2.0. Використовуємо 'hostpython3' для забезпечення наявності потрібних інструментів.
+# ВАЖЛИВО: Оновлено kivymd до 1.2.0. Додано hostpython3.
 requirements = hostpython3,python3,kivy==2.2.1,kivymd==1.2.0,requests,geocoder,urllib3,certifi,charset-normalizer,idna
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
-# ВАЖЛИВО: Уніфікуємо API до 33
+# Уніфікуємо API до 33
 android.minapi = 21
 android.targetapi = 33
 android.api = 33
