@@ -1,103 +1,50 @@
-name: Build Android APK
+[app]
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-  # Дозволяє ручний запуск з інтерфейсу GitHub Actions
-  workflow_dispatch:
+title = Погода
+package.name = weather
+package.domain = com.ferki
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      # Змінні середовища для P4A/Android
-      ANDROID_NDK: "" # Очищаємо, щоб не конфліктувало з тим, що встановить buildozer
-      ANDROIDNDK: ""
-      ANDROID_SDK_ROOT: "" 
-      # ВАЖЛИВО: Використовуємо гілку develop P4A, щоб отримати останні виправлення рецептів
-      P4A_BRANCH: develop 
-      ANDROID_API: 33 # Примусово використовуємо API 33
+source.dir = .
+source.main = weather.py
+source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+version = 1.0.0
 
-      - name: Set up Java (Temurin 17)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+# ВАЖЛИВО: Оновлено kivymd до 1.2.0, яка має кращу сумісність з новими API
+requirements = python3,kivy==2.2.1,kivymd==1.2.0,requests,geocoder,urllib3,certifi,charset-normalizer,idna
 
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            git wget unzip zip curl build-essential \
-            python3-pip python3-venv \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
-            cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
-      - name: Install python tools (cython, buildozer, p4a)
-        run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-          # Cython 0.29.33 все ще найнадійніший для Kivy/p4a
-          python3 -m pip install cython==0.29.33
-          # Фіксована версія buildozer
-          python3 -m pip install --user buildozer==1.4.0 
-          # Встановлюємо p4a з гілки develop (якщо потрібно)
-          python3 -m pip install git+https://github.com/kivy/python-for-android.git@develop
-          # додамо ~/.local/bin до PATH, щоб знайти команду buildozer
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+# ВАЖЛИВО: Уніфікуємо API до 33
+android.minapi = 21
+android.targetapi = 33
+android.api = 33
+android.maxsdk = 34
 
-      - name: Build APK using buildozer
-        run: |
-          echo "=== Starting APK build ==="
-          
-          # Очищуємо кеш, щоб змусити buildozer завантажити NDK знову
-          rm -rf ./.buildozer/android/platform/android-ndk-* || true
-          
-          # Налаштування PATH
-          export PATH="${HOME}/.local/bin:$PATH"
+# ВАЖЛИВО: p4a вимагає NDK >= 25
+android.ndk = 25b
+android.build_tools_version = 34.0.0
 
-          # Оновимо p4a (fetch/update)
-          python3 -m buildozer android update || true
+# Сучасна конфігурація архітектур
+android.archs = arm64-v8a
 
-          # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
-          # Використовуємо -v (verbose) для детальних логів
-          echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
+graphics_api = opengl_es2
+orientation = portrait
+fullscreen = 0
+android.multitouch_enabled = 1
 
-          if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "✅ APK successfully created!"
-            ls -lh bin/*.apk
-          else
-            echo "❌ APK not found! Ось останні 200 рядків build.log:"
-            tail -n 200 build.log || true
-            exit 1
-          fi
+android.allow_root = 1
+android.enable_androidx = 1
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: weather-app-apk
-          path: bin/*.apk
-          retention-days: 90
+android.copy_libs = 1
+android.storage = shared
+android.skip_storage_check = 1
 
-      - name: Upload build logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build.log
-          retention-days: 30
+android.aidl_fix = 1
+android.accept_sdk_license = true
+android.auto_update = true
+android.verify_certificates = true
 
-      - name: Optional: create GH release with APK
-        if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bin/*.apk
-          body: |
-            # Weather App Release
-            Android APK build from tag ${{ github.ref_name }}
-
+p4a.bootstrap = sdl2
+android.entrypoint = org.kivy.android.PythonActivity
+android.touch_sources = weather.py
