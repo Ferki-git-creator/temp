@@ -54,13 +54,13 @@ jobs:
           export ANDROID_SDK_ROOT="${HOME}/Android/Sdk"
           mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
           CMDLINE_ZIP="/tmp/commandlinetools-linux-9477386_latest.zip"
-          
+
           if [ ! -f "$CMDLINE_ZIP" ]; then
             wget -q -O "$CMDLINE_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
           fi
-          
+
           unzip -q -o "$CMDLINE_ZIP" -d "${ANDROID_SDK_ROOT}/cmdline-tools"
-          
+
           # Fix structure
           if [ -d "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" ]; then
             mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
@@ -68,7 +68,7 @@ jobs:
             mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
             mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/"* "${ANDROID_SDK_ROOT}/cmdline-tools/latest/" || true
           fi
-          
+
           export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${HOME}/.local/bin:$PATH"
           sdkmanager --version
 
@@ -103,6 +103,7 @@ jobs:
 
       - name: Clean old p4a artifacts
         run: |
+          # Цей крок чистить глобальний кеш
           rm -rf ~/.buildozer/android/platform/android-ndk-*
           rm -rf ./.buildozer/android/platform/android-ndk-*
           rm -rf ~/.buildozer/android/packages || true
@@ -119,13 +120,18 @@ jobs:
           unset ANDROID_NDK ANDROIDNDK || true
 
           python3 -m buildozer android update || true
-          echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
+          # *** ВАЖЛИВА ЗМІНА: Вивід перенаправлено до stdout/stderr, а не у build.log ***
+          # Використовуємо 'time' для відстеження тривалості збірки
+          time echo "y" | python3 -m buildozer -v android clean debug
+
+          # Перевіряємо, чи був успішно створений файл APK
           if ls bin/*.apk 1> /dev/null 2>&1; then
             echo "✅ APK successfully created!"
             ls -lh bin/*.apk
           else
-            echo "❌ APK not found! Check build.log"
+            echo "❌ APK not found! Дивіться логи вище."
+            # Якщо APK не знайдено, крок завершується з помилкою.
             exit 1
           fi
 
@@ -136,12 +142,7 @@ jobs:
           path: bin/*.apk
           retention-days: 90
 
-      - name: Upload build logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build.log
-          retention-days: 30
+      # *** ВИДАЛЕНО: Крок завантаження build.log ***
 
       - name: Optional create GH release with APK
         if: github.event_name == 'workflow_dispatch'
@@ -149,4 +150,4 @@ jobs:
         with:
           files: bin/*.apk
           generate_release_notes: true
-          
+
