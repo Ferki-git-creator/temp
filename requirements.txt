@@ -1,23 +1,22 @@
 # ==============================================
-# Weather App Requirements
-# Версії зафіксовані для стабільності збірки
+# Weather App Requirements (fixed versions)
 # ==============================================
 
-# Графічний інтерфейс
-kivy==2.3.1
-kivymd==1.2.0
+# GUI
+kivy==2.2.1
+kivymd==1.1.1
 
-# Мережеві запити
+# Network requests
 requests==2.31.0
 
-# Геолокація
+# Geolocation
 geocoder==1.38.1
 
-# Залежності requests
+# Requests dependencies
 urllib3==2.2.1
 certifi==2024.2.2
 charset-normalizer==3.3.2
 idna==3.6
 
-# Утиліти (опціонально)
+# Utilities (optional)
 # python-dateutil==2.9.0.post0
