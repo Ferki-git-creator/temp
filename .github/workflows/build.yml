@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # щоб уникнути неналежних глобальних NDK зі раннера
+      # скидаємо змінні щоб p4a не підхопив старі NDK зі середовища раннера
       ANDROID_NDK: ""
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
@@ -59,23 +59,23 @@ jobs:
         run: |
           rm -rf ~/.buildozer/android/platform/android-ndk-*
           rm -rf ./.buildozer/android/platform/android-ndk-*
-          # також прибираємо старі .buildozer (не обов'язково)
-          # rm -rf ./.buildozer/android/platform/android-sdk-*
+          # іноді також корисно почистити кеш пакетів
+          rm -rf ~/.buildozer/android/packages || true
 
       - name: Start APK build (debug)
         run: |
           set -e
           echo "=== Starting APK build ==="
-          # очистити потенційні змінні оточення
-          unset ANDROID_NDK ANDROIDNDK ANDROID_SDK_ROOT ANDROID_HOME ANDROID_SDK
+          # явно обнуляємо можливі змінні середовища (ще раз)
+          unset ANDROID_NDK ANDROIDNDK ANDROID_SDK_ROOT ANDROID_HOME ANDROID_SDK || true
 
-          # Попросимо buildozer підготувати p4a (fetch/update)
+          # Попросимо buildozer завантажити/оновити python-for-android і потрібні інструменти
           buildozer android update || true
 
-          # Запускаємо збірку (debug). Ввід "y" відповість на prompt- питання якщо треба.
+          # Запуск збірки (debug) — відповімо "y" автоматично
           echo "y" | buildozer -v android debug 2>&1 | tee build.log
 
-          # Перевіримо чи з'явився APK
+          # Перевірка наявності APK
           if ls bin/*.apk 1> /dev/null 2>&1; then
             echo "✅ APK successfully created!"
             ls -lh bin/*.apk
