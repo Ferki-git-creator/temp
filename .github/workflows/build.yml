@@ -13,12 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Змінні середовища для P4A/Android
-      ANDROID_NDK: "" # Очищаємо, щоб не конфліктувало з тим, що встановить buildozer
+      ANDROID_NDK: "" # Очищаємо
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: "" 
-      # ВАЖЛИВО: Використовуємо гілку develop P4A, щоб отримати останні виправлення рецептів
-      P4A_BRANCH: develop 
-      ANDROID_API: 33 # Примусово використовуємо API 33
+      # Ми дозволимо buildozer завантажити P4A самостійно, не фіксуємо гілку develop
+      # ANDROID_API: 33 # Примусово використовуємо API 33 (вже у spec)
 
     steps:
       - name: Checkout code
@@ -40,26 +39,28 @@ jobs:
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
             cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
 
-      - name: Install python tools (cython, buildozer, p4a)
+      - name: Install python tools (cython, buildozer)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          # Cython 0.29.33 все ще найнадійніший для Kivy/p4a
+          # Cython 0.29.33 - найбільш стабільна версія для Kivy
           python3 -m pip install cython==0.29.33
           # Фіксована версія buildozer
           python3 -m pip install --user buildozer==1.4.0 
-          # Встановлюємо p4a з гілки develop (надає актуальні рецепти)
-          python3 -m pip install git+https://github.com/kivy/python-for-android.git@develop
+          # Видалення можливих конфліктних гілок P4A
+          python3 -m pip uninstall python-for-android -y || true
           # додамо ~/.local/bin до PATH, щоб знайти команду buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Агресивне очищення кешу Buildozer/p4a
         run: |
-          echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
-          # Видаляємо всі артефакти p4a
+          echo "Запускаємо АГРЕСИВНЕ ОЧИЩЕННЯ ВСІХ АРТЕФАКТІВ..."
+          # ВИДАЛЯЄМО ВСЕ (NDK, SDK, тимчасові збірки)
           rm -rf ./.buildozer/android/platform/build-* || true
-          # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
+          rm -rf ./.buildozer/android/platform/android-ndk-* || true
+          rm -rf ~/.buildozer/android/platform/android-ndk-* || true
+          rm -rf ./.buildozer/android/platform/android-sdk-* || true
           
       - name: Build APK using buildozer
         run: |
@@ -70,7 +71,7 @@ jobs:
           # Оновимо p4a (fetch/update)
           python3 -m buildozer android update || true
 
-          # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
+          # Запуск збірки в режимі debug. (У цьому режимі Buildozer сам завантажить та налаштує необхідний P4A)
           echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
           if ls bin/*.apk 1> /dev/null 2>&1; then
@@ -104,4 +105,5 @@ jobs:
           body: |
             # Weather App Release
             Android APK build from tag ${{ github.ref_name }}
+
 
