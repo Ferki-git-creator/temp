@@ -5,18 +5,17 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
-  # Дозволяє ручний запуск з інтерфейсу GitHub Actions
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Змінні середовища для P4A/Android
-      ANDROID_NDK: "" # Очищаємо
+      # очищаємо/не даємо небажаних раннерних NDK змінних — будемо встановлювати власний SDK у $HOME/Android/Sdk
+      ANDROID_NDK: ""
       ANDROIDNDK: ""
-      ANDROID_SDK_ROOT: "" 
-      
+      ANDROID_SDK_ROOT: ""
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,41 +36,51 @@ jobs:
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
             cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
 
-      - name: Install python tools (cython, buildozer, p4a)
+      - name: Install python tools (cython, buildozer)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          # Cython 0.29.33 - найбільш стабільна версія для Kivy
+          # Фіксуємо версію Cython
           python3 -m pip install cython==0.29.33
-          # Фіксуємо Buildozer та P4A на перевірених версіях
-          python3 -m pip uninstall python-for-android -y || true
-          python3 -m pip install --user buildozer==1.4.0 
-          # ВАЖЛИВО: Фіксуємо P4A на стабільній версії 2023.11.01, яка мала робочий рецепт libffi
-          python3 -m pip install python-for-android==2023.11.01
-          
-          # додамо ~/.local/bin до PATH, щоб знайти команду buildozer
+          # ***Ключова зміна: Фіксуємо версію Buildozer на 1.3.0, щоб уникнути конфлікту p4a***
+          python3 -m pip install --user buildozer==1.3.0
+          # додамо ~/.local/bin до PATH, щоб знайти buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Агресивне очищення кешу Buildozer/p4a
+          
+      # Крок для очищення кешу buildozer/p4a, якщо він існує
+      - name: Run aggressive cache cleanup
         run: |
-          echo "Запускаємо АГРЕСИВНЕ ОЧИЩЕННЯ ВСІХ АРТЕФАКТІВ..."
-          # ВИДАЛЯЄМО ВСЕ, включаючи старі збірки libffi, які можуть бути пошкоджені
+          echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
+          # Видаляємо всі артефакти p4a
           rm -rf ./.buildozer/android/platform/build-* || true
+          # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
-          rm -rf ./.buildozer/android/platform/android-ndk-* || true
+          # Видаляємо старі NDK, які могли викликати проблеми
           rm -rf ~/.buildozer/android/platform/android-ndk-* || true
-          rm -rf ./.buildozer/android/platform/android-sdk-* || true
-          
-      - name: Build APK using buildozer
+          rm -rf ./.buildozer/android/platform/android-ndk-* || true
+
+
+      - name: Setup resources dir (App Icon)
+        run: |
+          mkdir -p app/res || true
+          if [ -d "res" ]; then
+            cp -r res/drawable-* app/res/ || true
+          fi
+
+
+      - name: Build APK (Android Debug)
         run: |
           echo "=== Starting APK build ==="
-          
-          export PATH="${HOME}/.local/bin:$PATH"
+          # Тепер PATH автоматично містить ~/.local/bin і SDK інструменти через GITHUB_PATH
+          # Але перетворимо на повний PATH на випадок:
+          export PATH="${HOME}/.local/bin:${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:$PATH"
 
-          # НЕ викликаємо update, оскільки P4A вже встановлено
-          # python3 -m buildozer android update || true
+          unset ANDROID_NDK ANDROIDNDK || true
 
-          # Запуск збірки в режимі debug
+          # Оновимо p4a (fetch/update)
+          python3 -m buildozer android update || true
+
+          # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
           echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
           if ls bin/*.apk 1> /dev/null 2>&1; then
@@ -97,12 +106,15 @@ jobs:
           path: build.log
           retention-days: 30
 
-      - name: Optional:create GH release with APK
-        if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
-        uses: softprops/action-gh-release@v2
+      - name: Optional: create GH release with APK
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: softprops/action-gh-release@v1
         with:
           files: bin/*.apk
-          body: |
-            # Weather App Release
-            Android APK build from tag ${{ github.ref_name }}
+          tag_name: "v${{ github.run_number }}"
+          name: "App Release v${{ github.run_number }}"
+          draft: true
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
