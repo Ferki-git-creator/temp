@@ -39,15 +39,34 @@ jobs:
       - name: Install python tools (cython, buildozer)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          # Фіксуємо версію Cython
+          # Важливо: Фіксуємо cython для сумісності з Kivy 2.2.1
           python3 -m pip install cython==0.29.33
-          # ***Ключова зміна: Фіксуємо версію Buildozer на 1.3.0, щоб уникнути конфлікту p4a***
-          python3 -m pip install --user buildozer==1.3.0
+          # Встановлюємо Buildozer версії 1.5.0 або новішої, щоб виправити помилку пошуку python-for-android
+          python3 -m pip install --user "buildozer>=1.5.0"
           # додамо ~/.local/bin до PATH, щоб знайти buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          
-      # Крок для очищення кешу buildozer/p4a, якщо він існує
-      - name: Run aggressive cache cleanup
+
+      - name: Install Android SDK (Platform tools & Build tools)
+        run: |
+          # Встановлення необхідних інструментів SDK у $HOME/Android/Sdk
+          export ANDROID_SDK_ROOT=$HOME/Android/Sdk
+          mkdir -p $ANDROID_SDK_ROOT
+          # Встановлення інструментів командного рядка
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          rm cmdline-tools.zip
+
+          # Додаємо інструменти до PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+          # Завантаження та прийняття ліцензії (важливо для запуску sdkmanager)
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          # Завантаження build-tools та platform-tools (API 33)
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-33" "platform-tools"
+
+      - name: Run Buildozer clean (Aggressive cache clear)
         run: |
           echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
           # Видаляємо всі артефакти p4a
@@ -55,20 +74,10 @@ jobs:
           # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
-          # Видаляємо старі NDK, які могли викликати проблеми
-          rm -rf ~/.buildozer/android/platform/android-ndk-* || true
-          rm -rf ./.buildozer/android/platform/android-ndk-* || true
+          # Чистимо всі робочі каталоги Buildozer
+          python3 -m buildozer -v android clean
 
-
-      - name: Setup resources dir (App Icon)
-        run: |
-          mkdir -p app/res || true
-          if [ -d "res" ]; then
-            cp -r res/drawable-* app/res/ || true
-          fi
-
-
-      - name: Build APK (Android Debug)
+      - name: Build APK
         run: |
           echo "=== Starting APK build ==="
           # Тепер PATH автоматично містить ~/.local/bin і SDK інструменти через GITHUB_PATH
@@ -111,9 +120,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: bin/*.apk
-          tag_name: "v${{ github.run_number }}"
-          name: "App Release v${{ github.run_number }}"
-          draft: true
+          tag_name: v${{ env.VERSION }}-${{ github.sha }}
+          name: Weather App ${{ env.VERSION }}
+          draft: false
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
