@@ -37,7 +37,7 @@ jobs:
           zlib1g-dev \
           libncurses5-dev \
           libncursesw5-dev \
-          libtinfo5 \
+          libtinfo6 \
           cmake \
           libffi-dev \
           libssl-dev \
@@ -55,9 +55,8 @@ jobs:
     - name: Configure Buildozer
       run: |
         echo "=== Configuring Buildozer ==="
-        # allow_root потрібний для CI
         echo "allow_root = 1" >> buildozer.spec
-        echo "=== buildozer.spec ==="
+        echo "=== Resulting buildozer.spec ==="
         cat buildozer.spec
 
     - name: Copy Android icons (res → app/res)
@@ -65,7 +64,7 @@ jobs:
         echo "=== Copying Android icons ==="
         mkdir -p app/res
         cp -r res/drawable-* app/res/
-        echo "=== Resulting app/res structure ==="
+        echo "=== app/res content ==="
         find app/res -maxdepth 2
 
     - name: Build APK (debug)
@@ -81,7 +80,7 @@ jobs:
           echo "📱 APK: $APK_FILE"
           echo "📦 Size: $(du -h "$APK_FILE" | cut -f1)"
         else
-          echo "❌ APK not found"
+          echo "❌ APK not found!"
           tail -50 build.log
           exit 1
         fi
