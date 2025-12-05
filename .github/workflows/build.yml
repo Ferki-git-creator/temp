@@ -107,7 +107,7 @@ jobs:
             cp -r res/drawable-* app/res/ || true
           fi
 
-      - name: AGGRESSIVE CLEANUP: Remove all p4a build artifacts
+      - name: AGGRESSIVE CLEANUP:Remove all p4a build artifacts
         run: |
           echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
           # Видаляємо всі артефакти p4a
