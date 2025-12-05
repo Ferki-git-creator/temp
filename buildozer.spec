@@ -20,7 +20,7 @@ android.targetapi = 33
 android.api = 33
 android.maxsdk = 34
 
-# ВАЖЛИВО: NDK >= 25 (p4a вимагає мінімум 25)
+# ВАЖЛИВО: p4a вимагає NDK >= 25
 android.ndk = 25b
 android.build_tools_version = 34.0.0
 
