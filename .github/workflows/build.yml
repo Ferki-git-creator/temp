@@ -96,7 +96,7 @@ jobs:
           path: build.log
           retention-days: 30
 
-      - name: Optional: create GH release with APK
+      - name: Optional:create GH release with APK
         if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v2
         with:
