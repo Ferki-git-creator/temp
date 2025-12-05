@@ -47,7 +47,7 @@ jobs:
           ninja-build \
           lld
 
-    - name: Install Buildozer and dependencies
+    - name: Install Buildozer
       run: |
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install cython==0.29.33
@@ -55,26 +55,23 @@ jobs:
 
     - name: Configure Buildozer
       run: |
-        echo "=== Configuring Buildozer ==="
         echo "allow_root = 1" >> buildozer.spec
-        echo "=== Resulting buildozer.spec ==="
         cat buildozer.spec
 
-    - name: Copy Android icons (res → app/res)
+    - name: Copy Android icons
       run: |
-        echo "=== Copying Android icons ==="
         mkdir -p app/res
         cp -r res/drawable-* app/res/
-        echo "=== app/res content ==="
-        find app/res -maxdepth 2
 
-    - name: Build APK (debug)
+    - name: Build APK
       run: |
         echo "=== Starting APK build ==="
-        buildozer android clean 2>&1 | tee -a build.log || true
-        echo "y" | buildozer android debug 2>&1 | tee -a build.log
+        # Створюємо папку python-for-android, якщо її немає
+        if [ ! -d ".buildozer/android/platform/python-for-android" ]; then
+            buildozer android update
+        fi
+        echo "y" | buildozer android debug
 
-        echo "=== Build finished ==="
         if ls bin/*.apk 1> /dev/null 2>&1; then
           echo "✅ APK successfully created!"
           APK_FILE=$(ls bin/*.apk | head -1)
@@ -82,7 +79,7 @@ jobs:
           echo "📦 Size: $(du -h "$APK_FILE" | cut -f1)"
         else
           echo "❌ APK not found!"
-          tail -50 build.log
+          tail -50 build.log || true
           exit 1
         fi
 
