@@ -11,96 +11,97 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # щоб уникнути небажаних глобальних NDK з раннера:
+      # щоб уникнути неналежних глобальних NDK зі раннера
       ANDROID_NDK: ""
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Java (Temurin 17)
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Set up Java (Temurin 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Install apt dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends \
-          git wget unzip zip curl build-essential \
-          python3-pip python3-venv \
-          autoconf automake libtool pkg-config \
-          zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
-          cmake libffi-dev libssl-dev ccache ninja-build lld
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git wget unzip zip curl build-essential \
+            python3-pip python3-venv \
+            autoconf automake libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
+            cmake libffi-dev libssl-dev ccache ninja-build lld
 
-    - name: Install python tools (cython, buildozer)
-      run: |
-        python3 -m pip install --upgrade pip setuptools wheel
-        python3 -m pip install cython==0.29.33
-        python3 -m pip install buildozer
+      - name: Install python tools (cython, buildozer)
+        run: |
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install cython==0.29.33
+          python3 -m pip install buildozer
 
-    - name: Ensure buildozer.spec has correct NDK (info)
-      run: |
-        echo "=== buildozer.spec preview ==="
-        sed -n '1,200p' buildozer.spec || true
+      - name: Ensure buildozer.spec preview
+        run: |
+          echo "=== buildozer.spec preview ==="
+          sed -n '1,200p' buildozer.spec || true
 
-    - name: Prepare res/icons (if exist)
-      run: |
-        mkdir -p app/res || true
-        if [ -d "res" ]; then
-          cp -r res/drawable-* app/res/ || true
-        fi
-        find app/res -maxdepth 2 -print || true
+      - name: Prepare res/icons (if exist)
+        run: |
+          mkdir -p app/res || true
+          if [ -d "res" ]; then
+            cp -r res/drawable-* app/res/ || true
+          fi
+          find app/res -maxdepth 2 -print || true
 
-    - name: Clean leftover .buildozer NDK (avoid old versions)
-      run: |
-        # remove any old android-ndk dirs to prevent p4a using older NDK
-        rm -rf ~/.buildozer/android/platform/android-ndk-*
-        rm -rf ./.buildozer/android/platform/android-ndk-*
+      - name: Clean leftover .buildozer NDK (avoid old versions)
+        run: |
+          rm -rf ~/.buildozer/android/platform/android-ndk-*
+          rm -rf ./.buildozer/android/platform/android-ndk-*
+          # також прибираємо старі .buildozer (не обов'язково)
+          # rm -rf ./.buildozer/android/platform/android-sdk-*
 
-    - name: Start APK build (debug)
-      run: |
-        set -e
-        echo "=== Starting APK build ==="
-        # Ensure we don't have environment variables pointing to older NDK/sdk
-        unset ANDROID_NDK ANDROIDNDK ANDROID_SDK_ROOT ANDROID_HOME ANDROID_SDK
-        # Optional: ensure python-for-android is fetched/updated by buildozer:
-        buildozer android update || true
+      - name: Start APK build (debug)
+        run: |
+          set -e
+          echo "=== Starting APK build ==="
+          # очистити потенційні змінні оточення
+          unset ANDROID_NDK ANDROIDNDK ANDROID_SDK_ROOT ANDROID_HOME ANDROID_SDK
 
-        # Run build - let p4a download/install required SDK/NDK (it will place into .buildozer)
-        # Use debug build to speed up and for testing
-        echo "y" | buildozer -v android debug 2>&1 | tee build.log
+          # Попросимо buildozer підготувати p4a (fetch/update)
+          buildozer android update || true
 
-        # Check APK existence
-        if ls bin/*.apk 1> /dev/null 2>&1; then
-          echo "✅ APK successfully created!"
-          ls -lh bin/*.apk
-        else
-          echo "❌ APK not found! Last 200 lines of build log:"
-          tail -n 200 build.log || true
-          exit 1
-        fi
+          # Запускаємо збірку (debug). Ввід "y" відповість на prompt- питання якщо треба.
+          echo "y" | buildozer -v android debug 2>&1 | tee build.log
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: weather-app-apk
-        path: bin/*.apk
-        retention-days: 90
+          # Перевіримо чи з'явився APK
+          if ls bin/*.apk 1> /dev/null 2>&1; then
+            echo "✅ APK successfully created!"
+            ls -lh bin/*.apk
+          else
+            echo "❌ APK not found! Ось останні 200 рядків build.log:"
+            tail -n 200 build.log || true
+            exit 1
+          fi
 
-    - name: Upload build logs
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: build.log
-        retention-days: 30
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-app-apk
+          path: bin/*.apk
+          retention-days: 90
 
-    - name: Optional: create GH release with APK
-      if: github.event_name == 'workflow_dispatch'
-      uses: softprops/action-gh-release@v1
-      with:
-        files: bin/*.apk
-        generate_release_notes: true
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build.log
+          retention-days: 30
+
+      - name: Optional:create GH release with APK
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          files: bin/*.apk
+          generate_release_notes: true
