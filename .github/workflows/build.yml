@@ -29,10 +29,11 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
+          # ДОДАНО: libltdl-dev для виправлення помилки LT_SYS_SYMBOL_USCORE при збірці libffi
           sudo apt-get install -y --no-install-recommends \
             git wget unzip zip curl build-essential \
             python3-pip python3-venv \
-            autoconf automake libtool pkg-config \
+            autoconf automake libtool pkg-config libltdl-dev \
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
             cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
 
@@ -152,9 +153,10 @@ jobs:
           path: build.log
           retention-days: 30
 
-      - name: Optional:create GH release with APK
+      - name: Optional: create GH release with APK
         if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: softprops/action-gh-release@v1
         with:
           files: bin/*.apk
           generate_release_notes: true
+
