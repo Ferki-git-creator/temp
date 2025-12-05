@@ -10,8 +10,8 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# ВАЖЛИВО: Оновлено kivymd до 1.2.0, яка має кращу сумісність з новими API
-requirements = python3,kivy==2.2.1,kivymd==1.2.0,requests,geocoder,urllib3,certifi,charset-normalizer,idna
+# Оновлено kivymd до 1.2.0. Використовуємо 'hostpython3' для забезпечення наявності потрібних інструментів.
+requirements = hostpython3,python3,kivy==2.2.1,kivymd==1.2.0,requests,geocoder,urllib3,certifi,charset-normalizer,idna
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
@@ -21,7 +21,7 @@ android.targetapi = 33
 android.api = 33
 android.maxsdk = 34
 
-# ВАЖЛИВО: p4a вимагає NDK >= 25
+# Використовуємо NDK 25b, який є стабільним для API 33
 android.ndk = 25b
 android.build_tools_version = 34.0.0
 
