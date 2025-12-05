@@ -2,156 +2,62 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     env:
-      ANDROID_NDK: ""
-      ANDROIDNDK: ""
-      ANDROID_SDK_ROOT: ""
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Set up Java (Temurin 17)
-        uses: actions/setup-java@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          python-version: '3.12'
 
-      - name: Install apt dependencies
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            git wget unzip zip curl build-essential \
-            python3-pip python3-venv \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
-            cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
+          python -m pip install --upgrade pip
+          pip install --upgrade buildozer cython
 
-      - name: Install python tools (cython, buildozer)
+      - name: Download and setup Android SDK cmdline-tools
         run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install cython==0.29.33
-          python3 -m pip install --user buildozer
-          # make pip-installed user scripts available in PATH for subsequent steps
-          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          curl -o commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools.zip
+          mv cmdline-tools latest
+          rm commandlinetools.zip
 
-      - name: Setup Android SDK root and cmdline-tools
+      - name: Install Android SDK packages
         run: |
-          set -e
-          export ANDROID_SDK_ROOT="${HOME}/Android/Sdk"
-          mkdir -p "${ANDROID_SDK_ROOT}"
-          cd "${HOME}"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --update
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.1.8937393"
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
 
-          CMDLINE_ZIP="/tmp/commandlinetools-linux-9477386_latest.zip"
-          if [ ! -f "$CMDLINE_ZIP" ]; then
-            wget -q -O "$CMDLINE_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
-          fi
-
-          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
-          unzip -q -o "$CMDLINE_ZIP" -d "${ANDROID_SDK_ROOT}/cmdline-tools"
-          if [ -d "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" ]; then
-            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
-          else
-            mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
-            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/"* "${ANDROID_SDK_ROOT}/cmdline-tools/latest/" || true
-          fi
-
-          # Export SDK root vars (do not overwrite PATH here)
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
-
-      - name: Install Android SDK packages (platform-tools, build-tools, platforms, ndk)
-        env:
-          ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
+      - name: Set environment variables for Buildozer
         run: |
-          set -e
-          SDK_ROOT="${ANDROID_SDK_ROOT}"
-          export PATH="${SDK_ROOT}/cmdline-tools/latest/bin:${SDK_ROOT}/platform-tools:$PATH"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
+          echo "PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
 
-          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
-          sdkmanager --sdk_root="${SDK_ROOT}" --update
-
-          # Install essentials and the NDK r25b package
-          sdkmanager --sdk_root="${SDK_ROOT}" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.1.8937393"
-          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
-
-          # expose core sdk vars (not PATH)
-          echo "ANDROID_SDK_ROOT=${SDK_ROOT}" >> $GITHUB_ENV
-          echo "ANDROID_HOME=${SDK_ROOT}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=${SDK_ROOT}/ndk/25.1.8937393" >> $GITHUB_ENV
-
-      - name: Ensure buildozer.spec preview
+      - name: Build APK with Buildozer
         run: |
-          echo "=== buildozer.spec preview ==="
-          sed -n '1,200p' buildozer.spec || true
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          buildozer android debug
 
-      - name: Prepare res/icons (if exist)
-        run: |
-          mkdir -p app/res || true
-          if [ -d "res" ]; then
-            cp -r res/drawable-* app/res/ || true
-          fi
-          find app/res -maxdepth 2 -print || true
-
-      - name: Clean old p4a artifacts (optional)
-        run: |
-          rm -rf ~/.buildozer/android/platform/android-ndk-*
-          rm -rf ./.buildozer/android/platform/android-ndk-*
-          rm -rf ~/.buildozer/android/packages || true
-
-      - name: Start APK build (debug)
-        env:
-          ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
-          ANDROID_HOME: "${HOME}/Android/Sdk"
-          ANDROID_NDK_HOME: "${HOME}/Android/Sdk/ndk/25.1.8937393"
-        run: |
-          set -e
-          echo "=== Starting APK build ==="
-
-          # prepend SDK and user bin to PATH but keep existing system PATH
-          export PATH="${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:${HOME}/.local/bin:$PATH"
-
-          unset ANDROID_NDK ANDROIDNDK || true
-
-          # Ensure p4a is fetched/updated
-          python3 -m buildozer android update || true
-
-          # Run build and log (tee now available because /usr/bin is still in PATH)
-          echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
-
-          if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "✅ APK successfully created!"
-            ls -lh bin/*.apk
-          else
-            echo "❌ APK not found! Last 200 lines of build.log:"
-            tail -n 200 build.log || true
-            exit 1
-          fi
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
         with:
-          name: weather-app-apk
+          name: app-debug.apk
           path: bin/*.apk
-          retention-days: 90
-
-      - name: Upload build logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build.log
-          retention-days: 30
-
-      - name: Optional:create GH release with APK
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          files: bin/*.apk
-          generate_release_notes: true
