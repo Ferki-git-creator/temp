@@ -1,0 +1,109 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # Дозволяє запускати вручну
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git \
+          wget \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          python3-pip \
+          python3-venv \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev \
+          curl \
+          ccache \
+          ninja-build \
+          lld
+          
+    - name: Install Buildozer and dependencies
+      run: |
+        python3 -m pip install --upgrade pip setuptools wheel
+        python3 -m pip install cython==0.29.33
+        python3 -m pip install buildozer
+        
+    - name: Configure Buildozer
+      run: |
+        echo "=== Configuring Buildozer ==="
+        
+        # Додаємо дозвіл на root
+        echo "allow_root = 1" >> buildozer.spec
+        
+        # Виводимо конфігурацію для перевірки
+        echo "=== Buildozer.spec content ==="
+        cat buildozer.spec
+        
+    - name: Build APK (debug)
+      run: |
+        echo "=== Starting APK build ==="
+        
+        # Очищаємо попередні збірки
+        buildozer android clean 2>&1 | tee -a build.log || true
+        
+        # Запускаємо збірку
+        echo "y" | buildozer android debug 2>&1 | tee -a build.log
+        
+        # Перевіряємо результат
+        echo "=== Build finished ==="
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "✅ APK successfully created!"
+          APK_FILE=$(ls bin/*.apk | head -1)
+          echo "📱 APK file: $APK_FILE"
+          echo "📦 Size: $(du -h "$APK_FILE" | cut -f1)"
+        else
+          echo "❌ APK not found!"
+          echo "=== Last 50 lines of build log ==="
+          tail -50 build.log
+          exit 1
+        fi
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: weather-app-apk
+        path: bin/*.apk
+        retention-days: 90
+        
+    - name: Upload build logs
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-logs
+        path: build.log
+        retention-days: 30
+        
+    - name: Create GitHub Release (опціонально)
+      if: github.event_name == 'workflow_dispatch'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: bin/*.apk
+        generate_release_notes: true
