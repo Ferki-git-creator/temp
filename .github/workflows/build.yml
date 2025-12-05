@@ -7,7 +7,7 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# Додаємо права для створення релізів (важливо для останнього кроку)
+# Додаємо права для створення релізів
 permissions:
   contents: write
 
@@ -20,12 +20,9 @@ jobs:
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
       
-      # *** ДОДАНО: Явні URL-адреси для SDL2-пакетів для обходу таймаутів p4a ***
-      P4A_SDL2_URL: https://www.libsdl.org/download-2.0.php
-      P4A_SDL2_IMAGE_URL: https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.5.tar.gz
-      P4A_SDL2_MIXER_URL: https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.0.4.tar.gz
-      P4A_SDL2_TTF_URL: https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.18.tar.gz
-      P4A_SDL2_GLES_URL: https://www.libsdl.org/download-2.0.php
+      # Додаємо змінну, яка може допомогти Buildozer'у використовувати встановлений нами NDK
+      NDK_ROOT: "${HOME}/Android/Sdk/ndk/25.1.8937393" # Встановлюємо цю змінну явно для Buildozer
+      
 
     steps:
       - name: Checkout code
@@ -40,7 +37,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          # libltdl-dev додано для виправлення помилки configure в libffi
+          # libltdl-dev для libffi
           sudo apt-get install -y --no-install-recommends \
             git wget unzip zip curl build-essential \
             python3-pip python3-venv \
@@ -51,7 +48,8 @@ jobs:
       - name: Install python tools (cython, buildozer)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install cython==0.29.33
+          # ВАЖЛИВО: Використовуємо Cython 3.0.10 для кращої сумісності з Python 3.10+
+          python3 -m pip install cython==3.0.10
           python3 -m pip install --user buildozer
           echo "${HOME}/.local/bin" >> $GITHUB_PATH
 
@@ -87,6 +85,7 @@ jobs:
 
           yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
           sdkmanager --sdk_root="${SDK_ROOT}" --update
+          # Встановлюємо NDK 25b (25.1.8937393) - стабільний і працює з Kivy 2.2.1
           sdkmanager --sdk_root="${SDK_ROOT}" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.1.8937393"
           yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
 
@@ -108,13 +107,18 @@ jobs:
             cp -r res/drawable-* app/res/ || true
           fi
 
-      - name: Clean old p4a artifacts
+      - name: AGGRESSIVE CLEANUP: Remove all p4a build artifacts
         run: |
-          # Цей крок чистить глобальний кеш
+          echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
+          # Видаляємо всі артефакти p4a
+          rm -rf ./.buildozer/android/platform/build-*
+          # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
+          rm -rf ~/.buildozer/android/packages || true
+          rm -rf ./.buildozer/android/packages || true
+          # Видаляємо старі кеші NDK
           rm -rf ~/.buildozer/android/platform/android-ndk-*
           rm -rf ./.buildozer/android/platform/android-ndk-*
-          rm -rf ~/.buildozer/android/packages || true
-
+          
       - name: Start APK build (debug)
         env:
           ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
@@ -126,9 +130,11 @@ jobs:
           export PATH="${HOME}/.local/bin:${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:$PATH"
           unset ANDROID_NDK ANDROIDNDK || true
 
+          # Оновлюємо та прибираємо старі артефакти NDK, якщо вони ще залишились
           python3 -m buildozer android update || true
-
-          # Вивід перенаправлено до stdout/stderr
+          
+          # Запуск збірки з 'clean' для гарантії, що всі рецепти будуть перезібрані
+          # Весь вивід йде в термінал.
           time echo "y" | python3 -m buildozer -v android clean debug
 
           # Перевіряємо, чи був успішно створений файл APK
@@ -136,7 +142,7 @@ jobs:
             echo "✅ APK successfully created!"
             ls -lh bin/*.apk
           else
-            echo "❌ APK not found! Дивіться логи вище."
+            echo "❌ APK not found! Дивіться логи кроку вище."
             # Якщо APK не знайдено, крок завершується з помилкою.
             exit 1
           fi
