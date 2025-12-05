@@ -10,7 +10,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# ВСІ твої залежності (без прямого pin'у libffi — p4a підхопить рецепт сам)
+# ВСІ твої залежності. Ми підтвердили, що ці залежності мають працювати разом.
 requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,urllib3,certifi,charset-normalizer,idna
 
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
@@ -20,11 +20,11 @@ android.targetapi = 33
 android.api = 33
 android.maxsdk = 34
 
-# ВАЖЛИВО: p4a вимагає NDK >= 25
+# ВАЖЛИВО: p4a вимагає NDK >= 25. Ми примусово використовуємо 25b.
 android.ndk = 25b
 android.build_tools_version = 34.0.0
 
-# Сучасна конфігурація архітектур
+# Сучасна конфігурація архітектур (arm64-v8a є обов'язковою для Google Play)
 android.archs = arm64-v8a
 
 graphics_api = opengl_es2
@@ -47,26 +47,3 @@ android.verify_certificates = true
 p4a.bootstrap = sdl2
 android.entrypoint = org.kivy.android.PythonActivity
 android.touch_sources = weather.py
-
-[p4a]
-branch = stable
-extra_requirements = openssl
-
-[buildozer]
-log_level = 2
-warn_on_root = 0
-warnings = 1
-allow_root = 1
-
-[app:source.exclude_patterns]
-*.pyc
-.git
-.gitignore
-build
-bin
-__pycache__
-
-[app:android.manifest_extra]
-# <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-# <uses-feature android:name="android.hardware.location.network" android:required="false" />
-# <application android:usesCleartextTraffic="true" />
