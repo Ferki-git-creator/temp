@@ -5,24 +5,20 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # Дозволяє ручний запуск з інтерфейсу GitHub Actions
   workflow_dispatch:
-
-# Додаємо права для створення релізів
-permissions:
-  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Очищаємо змінні середовища, щоб не конфліктували з нашим SDK
-      ANDROID_NDK: ""
+      # Змінні середовища для P4A/Android
+      ANDROID_NDK: "" # Очищаємо, щоб не конфліктувало з тим, що встановить buildozer
       ANDROIDNDK: ""
-      ANDROID_SDK_ROOT: ""
-      
-      # Додаємо змінну, яка може допомогти Buildozer'у використовувати встановлений нами NDK
-      NDK_ROOT: "${HOME}/Android/Sdk/ndk/25.1.8937393" # Встановлюємо цю змінну явно для Buildozer
-      
+      ANDROID_SDK_ROOT: "" 
+      # ВАЖЛИВО: Використовуємо гілку develop P4A, щоб отримати останні виправлення рецептів
+      P4A_BRANCH: develop 
+      ANDROID_API: 33 # Примусово використовуємо API 33
 
     steps:
       - name: Checkout code
@@ -37,113 +33,52 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          # libltdl-dev для libffi
           sudo apt-get install -y --no-install-recommends \
             git wget unzip zip curl build-essential \
             python3-pip python3-venv \
-            autoconf automake libtool pkg-config libltdl-dev \
+            autoconf automake libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
             cmake libffi-dev libssl-dev ccache ninja-build lld coreutils
 
-      - name: Install python tools (cython, buildozer)
+      - name: Install python tools (cython, buildozer, p4a)
         run: |
           python3 -m pip install --upgrade pip setuptools wheel
-          # ВАЖЛИВО: Використовуємо Cython 3.0.10 для кращої сумісності з Python 3.10+
-          python3 -m pip install cython==3.0.10
-          python3 -m pip install --user buildozer
-          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+          # Cython 0.29.33 все ще найнадійніший для Kivy/p4a
+          python3 -m pip install cython==0.29.33
+          # Фіксована версія buildozer
+          python3 -m pip install --user buildozer==1.4.0 
+          # Встановлюємо p4a з гілки develop (надає актуальні рецепти)
+          python3 -m pip install git+https://github.com/kivy/python-for-android.git@develop
+          # додамо ~/.local/bin до PATH, щоб знайти команду buildozer
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Setup Android cmdline-tools
-        run: |
-          set -e
-          export ANDROID_SDK_ROOT="${HOME}/Android/Sdk"
-          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
-          CMDLINE_ZIP="/tmp/commandlinetools-linux-9477386_latest.zip"
-
-          if [ ! -f "$CMDLINE_ZIP" ]; then
-            wget -q -O "$CMDLINE_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
-          fi
-
-          unzip -q -o "$CMDLINE_ZIP" -d "${ANDROID_SDK_ROOT}/cmdline-tools"
-
-          # Fix structure
-          if [ -d "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" ]; then
-            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
-          else
-            mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools/latest"
-            mv -f "${ANDROID_SDK_ROOT}/cmdline-tools/"* "${ANDROID_SDK_ROOT}/cmdline-tools/latest/" || true
-          fi
-
-          export PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${HOME}/.local/bin:$PATH"
-          sdkmanager --version
-
-      - name: Install Android SDK packages
-        run: |
-          set -e
-          SDK_ROOT="${HOME}/Android/Sdk"
-          export PATH="${SDK_ROOT}/cmdline-tools/latest/bin:${SDK_ROOT}/platform-tools:${HOME}/.local/bin:$PATH"
-
-          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
-          sdkmanager --sdk_root="${SDK_ROOT}" --update
-          # Встановлюємо NDK 25b (25.1.8937393) - стабільний і працює з Kivy 2.2.1
-          sdkmanager --sdk_root="${SDK_ROOT}" "platform-tools" "platforms;android-33" "build-tools;34.0.0" "ndk;25.1.8937393"
-          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses || true
-
-          # Export ENV variables for next steps
-          echo "ANDROID_SDK_ROOT=${SDK_ROOT}" >> $GITHUB_ENV
-          echo "ANDROID_HOME=${SDK_ROOT}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=${SDK_ROOT}/ndk/25.1.8937393" >> $GITHUB_ENV
-          echo "${SDK_ROOT}/platform-tools:${SDK_ROOT}/cmdline-tools/latest/bin:${HOME}/.local/bin" >> $GITHUB_PATH
-
-      - name: Ensure buildozer.spec preview
-        run: |
-          echo "=== buildozer.spec preview ==="
-          sed -n '1,50p' buildozer.spec || true
-
-      - name: Prepare res/icons (if exist)
-        run: |
-          mkdir -p app/res || true
-          if [ -d "res" ]; then
-            cp -r res/drawable-* app/res/ || true
-          fi
-
-      - name: AGGRESSIVE CLEANUP:Remove all p4a build artifacts
+      - name: Агресивне очищення кешу Buildozer/p4a
         run: |
           echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
           # Видаляємо всі артефакти p4a
-          rm -rf ./.buildozer/android/platform/build-*
+          rm -rf ./.buildozer/android/platform/build-* || true
           # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
-          # Видаляємо старі кеші NDK
-          rm -rf ~/.buildozer/android/platform/android-ndk-*
-          rm -rf ./.buildozer/android/platform/android-ndk-*
           
-      - name: Start APK build (debug)
-        env:
-          ANDROID_SDK_ROOT: "${HOME}/Android/Sdk"
-          ANDROID_HOME: "${HOME}/Android/Sdk"
-          ANDROID_NDK_HOME: "${HOME}/Android/Sdk/ndk/25.1.8937393"
+      - name: Build APK using buildozer
         run: |
-          set -e
           echo "=== Starting APK build ==="
-          export PATH="${HOME}/.local/bin:${HOME}/Android/Sdk/platform-tools:${HOME}/Android/Sdk/cmdline-tools/latest/bin:$PATH"
-          unset ANDROID_NDK ANDROIDNDK || true
-
-          # Оновлюємо та прибираємо старі артефакти NDK, якщо вони ще залишились
-          python3 -m buildozer android update || true
           
-          # Запуск збірки з 'clean' для гарантії, що всі рецепти будуть перезібрані
-          # Весь вивід йде в термінал.
-          time echo "y" | python3 -m buildozer -v android clean debug
+          export PATH="${HOME}/.local/bin:$PATH"
 
-          # Перевіряємо, чи був успішно створений файл APK
+          # Оновимо p4a (fetch/update)
+          python3 -m buildozer android update || true
+
+          # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
+          echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
+
           if ls bin/*.apk 1> /dev/null 2>&1; then
             echo "✅ APK successfully created!"
             ls -lh bin/*.apk
           else
-            echo "❌ APK not found! Дивіться логи кроку вище."
-            # Якщо APK не знайдено, крок завершується з помилкою.
+            echo "❌ APK not found! Ось останні 200 рядків build.log:"
+            tail -n 200 build.log || true
             exit 1
           fi
 
@@ -154,10 +89,19 @@ jobs:
           path: bin/*.apk
           retention-days: 90
 
-      - name: Optional create GH release with APK
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build.log
+          retention-days: 30
+
+      - name: Optional: create GH release with APK
+        if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
         with:
           files: bin/*.apk
-          generate_release_notes: true
+          body: |
+            # Weather App Release
+            Android APK build from tag ${{ github.ref_name }}
 
