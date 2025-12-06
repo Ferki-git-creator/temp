@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # очищаємо/не даємо небажаних раннерних NDK змінних — будемо встановлювати власний SDK у $HOME/Android/Sdk
+      # очищаємо/не даємо небажаних раннерних NDK змінних
       ANDROID_NDK: ""
       ANDROIDNDK: ""
       ANDROID_SDK_ROOT: ""
@@ -45,10 +45,6 @@ jobs:
           # КЛЮЧОВЕ ВИПРАВЛЕННЯ: Примусово встановлюємо Buildozer 1.5.0
           python3 -m pip install --user buildozer==1.5.0
           
-          echo "Перевіряємо версію Buildozer:"
-          python3 -m buildozer --version
-          
-          # додамо ~/.local/bin до PATH, де лежить buildozer
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Set up Android SDK
@@ -60,40 +56,36 @@ jobs:
           command-line-tools: latest
           all-licenses: true
 
-      - name: Clear problematic cache
+      - name: Clear problematic cache (ULTRA-AGGRESSIVE)
         run: |
-          echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
+          echo "Запускаємо АГРЕСИВНЕ очищення кешу Buildozer/p4a..."
           # Видаляємо всі артефакти p4a
           rm -rf ./.buildozer/android/platform/build-* || true
-          # Видаляємо всі завантажені пакети, щоб змусити Buildozer завантажити їх знову
+          rm -rf ./.buildozer/android/platform/build/dists/* || true
+          # Видаляємо всі завантажені пакети
           rm -rf ~/.buildozer/android/packages || true
           rm -rf ./.buildozer/android/packages || true
-          # Видаляємо старий кеш Buildozer
+          # Видаляємо старий кеш Buildozer/p4a
           rm -rf ~/.buildozer/cache || true
-
-      - name: Run Buildozer (Full output to terminal) 🚀
-        run: |
-          echo "=== Starting APK build (лог виводиться напряму) ==="
+          rm -rf ~/.platform_cache || true
           
-          # Видаляємо змінні, щоб уникнути конфліктів
+      - name: Run Buildozer (Full output, log_level=2) 🚀
+        run: |
+          echo "=== Starting APK build (лог виводиться напряму з log_level=2) ==="
+          
           unset ANDROID_NDK ANDROIDNDK || true
 
-          # Оновимо p4a (fetch/update)
           python3 -m buildozer android update
 
-          # Запуск збірки. Якщо буде помилка, цей крок автоматично завершить роботу з помилкою.
-          echo "y" | python3 -m buildozer -v android debug
+          # Запуск збірки. log_level=2 вже вказано у buildozer.spec.
+          # Якщо буде помилка, справжній детальний лог буде прямо тут.
+          echo "y" | python3 -m buildozer android debug
 
       - name: Check and List APK
-        # Цей крок виконується лише у разі успіху попереднього кроку
+        if: ${{ success() }}
         run: |
-          if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "✅ APK успішно створено!"
-            ls -lh bin/*.apk
-          else
-            echo "❌ APK не знайдено! Це не повинно статися, якщо попередній крок був успішним."
-            exit 1
-          fi
+          echo "✅ APK успішно створено!"
+          ls -lh bin/*.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -112,4 +104,3 @@ jobs:
           body: "Автоматичний реліз APK для Android."
           draft: false
           prerelease: false
-          
