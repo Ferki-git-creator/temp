@@ -10,10 +10,8 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# КРИТИЧНЕ ОНОВЛЕННЯ ДЛЯ ВИРІШЕННЯ ПРОБЛЕМ SSL/TLS:
-# Явно додаємо openssl, cffi та cryptography. Це гарантує, що p4a
-# компілює OpenSSL перед cryptography, що необхідно для requests.
-requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,cffi,cryptography,openssl
+# ОНОВЛЕНО: Повний список залежностей для requests/cryptography
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,cffi,cryptography,openssl,hostpython3,setuptools,six,certifi,idna,charset-normalizer
 
 # Додайте сюди інші необхідні дозволи, якщо вони є.
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
@@ -50,3 +48,11 @@ android.verify_certificates = true
 p4a.bootstrap = sdl2
 android.entrypoint = org.kivy.android.PythonActivity
 android.touch_sources = weather.py
+
+
+# >>>>>> КРИТИЧНЕ ВИПРАВЛЕННЯ ДЛЯ ЛОГІВ ТА КОМПІЛЯЦІЇ <<<<<<<
+# 1. log_level = 2: Увімкне повний детальний лог, як вимагає Buildozer.
+# 2. p4a.ndk_api = 33: Виправить проблему лінкеру (link error) з OpenSSL/Cryptography.
+log_level = 0
+p4a.ndk_target_api = 33
+p4a.ndk_api = 33
