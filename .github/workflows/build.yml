@@ -42,10 +42,9 @@ jobs:
           # Встановлюємо Cython. Версія 0.29.33 необхідна для Kivy 2.2.1
           python3 -m pip install cython==0.29.33
           
-          # *** КЛЮЧОВЕ ВИПРАВЛЕННЯ #2: Примусово встановлюємо Buildozer 1.5.0, щоб виправити проблему з python-for-android==2023.11.01
+          # КЛЮЧОВЕ ВИПРАВЛЕННЯ: Примусово встановлюємо Buildozer 1.5.0
           python3 -m pip install --user buildozer==1.5.0
           
-          # Перевіримо, чи встановилася нова версія
           echo "Перевіряємо версію Buildozer:"
           python3 -m buildozer --version
           
@@ -55,18 +54,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          # Встановлюємо SDK 33, бо це наш android.api
           api-level: 33
           build-tools: 34.0.0
-          # NDK 25b - це наш android.ndk
           ndk: 25b
-          
-          # Встановлюємо cmdline-tools автоматично
           command-line-tools: latest
-          # Приймаємо всі ліцензії
           all-licenses: true
 
-      # Додаткове очищення кешу, щоб гарантувати, що старий кеш p4a не заважає
       - name: Clear problematic cache
         run: |
           echo "Запускаємо агресивне очищення кешу Buildozer/p4a..."
@@ -78,26 +71,27 @@ jobs:
           # Видаляємо старий кеш Buildozer
           rm -rf ~/.buildozer/cache || true
 
-      - name: Run Buildozer
+      - name: Run Buildozer (Full output to terminal) 🚀
         run: |
-          echo "=== Starting APK build ==="
+          echo "=== Starting APK build (лог виводиться напряму) ==="
           
           # Видаляємо змінні, щоб уникнути конфліктів
           unset ANDROID_NDK ANDROIDNDK || true
 
           # Оновимо p4a (fetch/update)
-          python3 -m buildozer android update || true
+          python3 -m buildozer android update
 
-          # Запуск збірки в режимі debug (відповімо y автоматично). Логи пишемо через tee.
-          # Ми використовуємо команду 'y' | ... для автоматичного підтвердження завантаження SDK
-          echo "y" | python3 -m buildozer -v android debug 2>&1 | tee build.log
+          # Запуск збірки. Якщо буде помилка, цей крок автоматично завершить роботу з помилкою.
+          echo "y" | python3 -m buildozer -v android debug
 
+      - name: Check and List APK
+        # Цей крок виконується лише у разі успіху попереднього кроку
+        run: |
           if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "✅ APK successfully created!"
+            echo "✅ APK успішно створено!"
             ls -lh bin/*.apk
           else
-            echo "❌ APK not found! Ось останні 200 рядків build.log:"
-            tail -n 200 build.log || true
+            echo "❌ APK не знайдено! Це не повинно статися, якщо попередній крок був успішним."
             exit 1
           fi
 
@@ -107,13 +101,6 @@ jobs:
           name: weather-app-apk
           path: bin/*.apk
           retention-days: 90
-
-      - name: Upload build logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build.log
-          retention-days: 30
 
       - name: Optional:create GH release with APK
         if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
@@ -126,9 +113,3 @@ jobs:
           draft: false
           prerelease: false
           
-      - name: Display end of log (for failure)
-        if: ${{ failure() }}
-        run: |
-          echo "Повний лог при помилці:"
-          cat build.log || true
-
