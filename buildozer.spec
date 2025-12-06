@@ -10,11 +10,12 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# === КРИТИЧНЕ ВИПРАВЛЕННЯ ===
-# Додано hostpython3, openssl та libffi.
-# Openssl необхідний для роботи HTTPS (requests). Libffi допомагає у збірці.
-requirements = python3,hostpython3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,openssl,libffi
+# ОНОВЛЕНО: Додано cffi та cryptography.
+# Це критично важливо для успішної компіляції глибоких залежностей requests (SSL/TLS)
+# як Android-рецептів, а не через pip.
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,cffi,cryptography
 
+# Додайте сюди інші необхідні дозволи, якщо вони є.
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
 
 android.minapi = 21
