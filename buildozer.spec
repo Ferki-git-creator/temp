@@ -10,10 +10,10 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,svg,txt
 
 version = 1.0.0
 
-# ОНОВЛЕНО: Додано cffi та cryptography.
-# Це критично важливо для успішної компіляції глибоких залежностей requests (SSL/TLS)
-# як Android-рецептів, а не через pip.
-requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,cffi,cryptography
+# КРИТИЧНЕ ОНОВЛЕННЯ ДЛЯ ВИРІШЕННЯ ПРОБЛЕМ SSL/TLS:
+# Явно додаємо openssl, cffi та cryptography. Це гарантує, що p4a
+# компілює OpenSSL перед cryptography, що необхідно для requests.
+requirements = python3,kivy==2.2.1,kivymd==1.1.1,requests,geocoder,cffi,cryptography,openssl
 
 # Додайте сюди інші необхідні дозволи, якщо вони є.
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
