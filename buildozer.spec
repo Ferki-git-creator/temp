@@ -53,6 +53,6 @@ android.touch_sources = weather.py
 # >>>>>> КРИТИЧНЕ ВИПРАВЛЕННЯ ДЛЯ ЛОГІВ ТА КОМПІЛЯЦІЇ <<<<<<<
 # 1. log_level = 2: Увімкне повний детальний лог, як вимагає Buildozer.
 # 2. p4a.ndk_api = 33: Виправить проблему лінкеру (link error) з OpenSSL/Cryptography.
-log_level = 0
+log_level = 2
 p4a.ndk_target_api = 33
 p4a.ndk_api = 33
